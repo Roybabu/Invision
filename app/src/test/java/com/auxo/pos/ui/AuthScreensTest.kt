@@ -416,7 +416,7 @@ class AuthScreensTabletTest {
             AuxoTheme { LoginContent(LoginUiState(identifier = "roy", password = "x"), {}, {}, {}) }
         }
         composeRule.onNodeWithContentDescription("Auxo").assertIsDisplayed()
-        composeRule.onNodeWithTag("login_submit").performScrollTo().assertIsDisplayed().assertIsEnabled()
+        composeRule.onNodeWithTag("login_submit").assertIsDisplayed().assertIsEnabled()
     }
 
     @Test
