@@ -55,6 +55,7 @@ import com.auxo.pos.ui.theme.AuthInkMuted
 import com.auxo.pos.ui.theme.AuthEmerald
 import com.auxo.pos.ui.theme.AuthMint
 import com.auxo.pos.ui.theme.AuthMintLight
+import androidx.compose.material3.LocalTextStyle
 
 /** The white-to-mint backdrop of the splash, onboarding, sign-in and setup screens. */
 @Composable
@@ -182,25 +183,30 @@ fun AuthPillField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     trailingIcon: (@Composable () -> Unit)? = null,
     enabled: Boolean = true,
+    /** A slimmer field (45 dp, smaller icon and text) for pages laid out on a fixed design frame. */
+    compact: Boolean = false,
+    /** Marks the field red without showing [error] under it, for pages that show the message elsewhere. */
+    markError: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().then(if (compact) Modifier.height(45.dp) else Modifier),
+        textStyle = if (compact) MaterialTheme.typography.bodyMedium else LocalTextStyle.current,
         enabled = enabled,
         singleLine = true,
         shape = RoundedCornerShape(32.dp),
-        placeholder = { Text(placeholder, color = AuthInkMuted) },
+        placeholder = { Text(placeholder, color = AuthInkMuted, style = if (compact) MaterialTheme.typography.bodyMedium else LocalTextStyle.current) },
         leadingIcon = {
             Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(AuthMint),
+                modifier = Modifier.size(if (compact) 32.dp else 40.dp).clip(CircleShape).background(AuthMint),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(painterResource(icon), contentDescription = null, tint = AuthEmerald, modifier = Modifier.size(22.dp))
+                Icon(painterResource(icon), contentDescription = null, tint = AuthEmerald, modifier = Modifier.size(if (compact) 18.dp else 22.dp))
             }
         },
         trailingIcon = trailingIcon,
-        isError = error != null,
+        isError = error != null || markError,
         supportingText = if (error != null) {
             { Text(error) }
         } else {
