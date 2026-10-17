@@ -30,7 +30,6 @@ import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,7 +42,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
@@ -72,12 +70,13 @@ import com.auxo.pos.ui.theme.Spacing
 import com.auxo.pos.viewmodel.LoginMessage
 import com.auxo.pos.viewmodel.LoginUiState
 import com.auxo.pos.viewmodel.LoginViewModel
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.statusBarsPadding
 
 /** Width over height of auxo_mark.png (the icon glyph alone, cropped from the approved vertical lockup). */
 private const val MARK_ASPECT = 261f / 191f
-
-/** Fixed height of the illustrated panel at the top of the sign-in page, whatever the screen's own height. */
-private val HERO_HEIGHT = 300.dp
 
 /** The sign-in screen: the first screen on every launch. [hasBusiness] is false until a business has been set up on this device. */
 @Composable
@@ -101,6 +100,27 @@ fun LoginScreen(
     }
 }
 
+/*
+ * Layers, back to front, on one portrait page:
+ *   1. the green picture (auth_login_bg), drawn at its own shape across the width and never covered or cropped on
+ *      the sides: it holds the dark landscape, the saplings and its curved white sheet at the bottom;
+ *   2. the Auxo mark, name and the pitch, over the dark part of the picture;
+ *   3. the form, inside the picture's white sheet only. It has no card or background of its own, and it scrolls
+ *      inside that area when the keyboard is up or the phone is short, so the picture never moves or hides.
+ */
+
+/** Height over width of auth_login_bg. */
+private const val ART_ASPECT = 1672f / 941f
+
+/** Where the white sheet is safe to write on, as a share of the picture's height (its curved edge peaks near 0.54). */
+private const val FORM_TOP = 0.585f
+
+/** How much of the picture's height the pitch text may use, so it stays on the dark part. */
+private const val PITCH_BOTTOM = 0.50f
+
+/** The widest the page is drawn; on a tablet it is a centred phone-shaped column. */
+private val MAX_LOGIN_WIDTH = 480.dp
+
 @Composable
 fun LoginContent(
     state: LoginUiState,
@@ -113,22 +133,22 @@ fun LoginContent(
 ) {
     var showPassword by rememberSaveable { mutableStateOf(false) }
     var rememberMe by rememberSaveable { mutableStateOf(true) }
-    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(if (dark) MaterialTheme.colorScheme.background else Color.White)
-            .testTag("auth_screen"),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Column(modifier = Modifier.widthIn(max = 480.dp).fillMaxWidth().fillMaxSize()) {
-            LoginHero(dark = dark, topEnd = topEnd)
-            Surface(
-                shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                color = if (dark) MaterialTheme.colorScheme.surface else Color.White,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().background(Color.White).testTag("auth_screen")) {
+        // The picture sets the page's shape. On a wide or short window the column narrows so the whole picture still fits its height.
+        val width = minOf(maxWidth, MAX_LOGIN_WIDTH, maxHeight / ART_ASPECT)
+        val artHeight = width * ART_ASPECT
+        Box(modifier = Modifier.width(width).fillMaxHeight().align(Alignment.TopCenter)) {
+            Image(
+                painter = painterResource(R.drawable.auth_login_bg),
+                contentDescription = null,
+                contentScale = ContentScale.FillWidth,
+                alignment = Alignment.TopCenter,
+                modifier = Modifier.fillMaxWidth().requiredHeight(artHeight),
+            )
+            LoginPitch(modifier = Modifier.fillMaxWidth().height(artHeight * PITCH_BOTTOM))
+            // The form region: from the top of the white sheet to the bottom of the screen, and nothing above it.
+            Box(modifier = Modifier.fillMaxSize().padding(top = artHeight * FORM_TOP)) {
                 LoginForm(
                     state = state,
                     onIdentifierChange = onIdentifierChange,
@@ -143,71 +163,56 @@ fun LoginContent(
                 )
             }
         }
-    }
-}
-
-/** The illustrated panel: the Auxo mark and the "Manage / Sell / Grow" pitch, over the growth artwork. */
-@Composable
-private fun LoginHero(dark: Boolean, topEnd: (@Composable () -> Unit)?) {
-    Box(modifier = Modifier.fillMaxWidth().height(HERO_HEIGHT)) {
-        if (dark) {
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.primary))
-        } else {
-            Image(
-                painter = painterResource(R.drawable.auth_login_bg),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .safeDrawingPadding()
-                .padding(horizontal = Spacing.screen, vertical = Spacing.sm),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.auxo_mark),
-                contentDescription = stringResource(R.string.app_name),
-                modifier = Modifier.width(56.dp).aspectRatio(MARK_ASPECT),
-            )
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            Text(
-                stringResource(R.string.app_tagline),
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White.copy(alpha = 0.75f),
-            )
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    stringResource(R.string.auth_login_hero_headline),
-                    style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 26.sp),
-                    fontWeight = FontWeight.ExtraBold,
-                    color = Color.White,
-                )
-                Text(
-                    stringResource(R.string.auth_login_hero_body),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.padding(top = Spacing.xs).widthIn(max = 220.dp),
-                )
-            }
-            Spacer(Modifier.weight(1f))
-        }
         if (topEnd != null) {
             Box(modifier = Modifier.align(Alignment.TopEnd).safeDrawingPadding().padding(12.dp)) { topEnd() }
         }
     }
 }
 
-/** The scrollable white sheet: the sign-in fields, and a way to set up a new business underneath. */
+/** The Auxo mark, name and tagline, and the "Manage / Sell / Grow" pitch, written over the dark part of the picture. */
+@Composable
+private fun LoginPitch(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.statusBarsPadding().padding(horizontal = Spacing.screen, vertical = Spacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.auxo_mark),
+            contentDescription = stringResource(R.string.app_name),
+            modifier = Modifier.width(56.dp).aspectRatio(MARK_ASPECT),
+        )
+        Text(
+            stringResource(R.string.app_name),
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White,
+            modifier = Modifier.padding(top = 2.dp),
+        )
+        Text(
+            stringResource(R.string.app_tagline),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color.White.copy(alpha = 0.75f),
+        )
+        Spacer(Modifier.weight(1f))
+        Column(horizontalAlignment = Alignment.Start, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                stringResource(R.string.auth_login_hero_headline),
+                style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 26.sp),
+                fontWeight = FontWeight.ExtraBold,
+                color = Color.White,
+            )
+            Text(
+                stringResource(R.string.auth_login_hero_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.White.copy(alpha = 0.85f),
+                modifier = Modifier.padding(top = Spacing.xs).widthIn(max = 200.dp),
+            )
+        }
+        Spacer(Modifier.weight(0.6f))
+    }
+}
+
+/** The sign-in fields and a way to set up a new business, scrolling inside the picture's white sheet. */
 @Composable
 private fun LoginForm(
     state: LoginUiState,
